@@ -1,0 +1,26 @@
+subnet:
+  # Filters for selecting subnets from AWS account
+  # NOTE: at least 1 filter must be specified, exporter will not enumerate all subnets in account
+  #
+  # Multiple filters are ANDed together
+  filter:
+    ids:
+    - subnet-1234
+    - subnet-abcd
+    tagFilters:
+      # Finds subnets with the tag 'kubernetes.io/cluster/eks-cluster' attached with any value
+      - key: kubernetes.io/cluster/eks-cluster
+
+      # Finds subnets with the tag 'Team' with values 'teamA' or 'teamB'
+      - key: Team
+        values:
+          - teamA
+          - teamB
+
+  # Controls what information is in 'info' metric
+  info:
+    includeTags:
+      - Name
+    excludeAz: false # default: false
+    excludeVpc: false # default: false
+    excludeCidr: false # default: false
