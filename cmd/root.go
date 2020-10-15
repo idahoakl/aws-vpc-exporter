@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,6 +17,8 @@ import (
 	"github.com/idahoakl/aws-vpc-exporter/pkg/subnet"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/common/log"
+	"github.com/prometheus/common/version"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -27,13 +28,27 @@ var (
 	envVarPrefix string
 	listenAddr   string
 	RootCmd      = cobra.Command{
-		Use:  "aws_vpc_exporter",
-		Args: cobra.NoArgs,
-		RunE: run,
+		Use:     "aws_vpc_exporter",
+		Args:    cobra.NoArgs,
+		RunE:    run,
+		Version: "N/A",
 	}
 )
 
+var (
+	// Revision represents the git sha of the source code for the binary
+	Revision = "N/A"
+	Version  = "edge"
+	Branch   = "main"
+)
+
 func init() {
+	RootCmd.SetVersionTemplate(fmt.Sprintf("version=%s  branch=%s  revision=%s\n", Version, Branch, Revision))
+	version.Version = Version
+	version.Revision = Revision
+	version.Branch = Branch
+	prometheus.MustRegister(version.NewCollector("aws_vpc_exporter"))
+
 	RootCmd.Flags().StringVarP(&cfgFile, "config", "c", "config.yaml", "configuration file")
 	RootCmd.Flags().StringVar(&envVarPrefix, "envPrefix", "SVC", "environment variable prefix to use for config values")
 	RootCmd.Flags().StringSlice("subnetIds", []string{}, "subnet ids to retrieve")
@@ -58,7 +73,11 @@ func run(cmd *cobra.Command, _ []string) error {
 	viper.AutomaticEnv()
 
 	if err = viper.ReadInConfig(); err != nil {
-		return err
+		if os.IsNotExist(err) {
+			log.Warn("configuration file not found, using defaults")
+		} else {
+			return err
+		}
 	}
 
 	if err = viper.Unmarshal(&cfg); err != nil {
@@ -73,7 +92,7 @@ func run(cmd *cobra.Command, _ []string) error {
 	svc := ec2.New(sess)
 
 	if cfg.Subnet != nil {
-		log.Println("Adding subnet collector")
+		log.Info("Adding subnet collector")
 		subnetCollector, err := subnet.New(svc, *cfg.Subnet)
 		if err != nil {
 			return err
@@ -102,12 +121,12 @@ func run(cmd *cobra.Command, _ []string) error {
 		exitChan <- fmt.Sprint(<-c)
 	}()
 
-	log.Println("Listening on", listenAddr)
+	log.Info("Listening on", listenAddr)
 	go server.ListenAndServe()
 
 	<-exitChan
 
-	log.Println("Shutting down...")
+	log.Info("Shutting down...")
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	server.Shutdown(ctx)
