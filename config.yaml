@@ -4,6 +4,7 @@ subnet:
   #
   # Multiple filters are ANDed together
   filter:
+    # ids list can be overridden via CLI flag --subnetIds
     ids:
     - subnet-1234
     - subnet-abcd
